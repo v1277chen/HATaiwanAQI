@@ -26,16 +26,12 @@
 1. 在 Home Assistant 中，導航至 **設定** > **設備與服務** > **新增整合**。
 2. 搜尋 **Taiwan AQI**，並按照螢幕上的指示進行設定。
 3. 你需要提供：
-   - **API 金鑰**：存取空氣品質資料的 API 金鑰。
+   - <b>資料來源為<a href='https://data.moenv.gov.tw/'>台灣環境部環境資料開放平台開放資料API</a>，使用整合之前記得先加入會員申請API KEY。</b>
+   -  **API 金鑰**：存取空氣品質資料的 API 金鑰。
    - **監測站**：選擇你想要監控的台灣空氣品質監測站。
 
-## 使用方式
-- 安裝完成後，你將會看到各個空氣品質指標的感測器實體。
-
-## 貢獻
-歡迎 fork 此專案、提交問題、並建立 pull requests。任何貢獻都十分歡迎！
-
-## 授權
+## 致謝
+- 此專案是從<a href='https://github.com/besthand/TaiwanAQI'>besthand/TaiwanAQI</a>修改而來
 此專案採用 MIT 授權條款。
 
 ---
@@ -68,14 +64,10 @@ This custom integration for [Home Assistant](https://www.home-assistant.io/) all
 1. In Home Assistant, navigate to **Configuration** > **Devices & Services** > **Add Integration**.
 2. Search for **Taiwan AQI** and follow the on-screen instructions.
 3. You will need to provide:
-   - **API Key**: An API key to access the air quality data.
+   - The data source is the <a href='https://data.moenv.gov.tw/'>Environmental Data Open Platform API of the Taiwan Ministry of the Environment</a>.<br>
+   - **API Key**: An API key to access the air quality data.   - 
    - **Monitoring Station**: Select your preferred air quality monitoring station in Taiwan.
 
-## Usage
-- After installation, you will see sensor entities created for each air quality indicator.
+## Credits
 
-## Contributions
-Feel free to fork this project, submit issues, and create pull requests. Contributions are welcome!
-
-## License
-This project is licensed under the MIT License.
+- This project is forked from <a href='https://github.com/besthand/TaiwanAQI'>besthand/TaiwanAQI</a>
