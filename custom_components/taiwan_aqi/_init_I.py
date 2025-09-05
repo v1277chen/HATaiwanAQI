@@ -11,7 +11,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up Taiwan AQI from a config entry."""
-    # 建立空氣品質資料協調器實例
+    # 建立空氣品質資料感測器實體
     coordinator = AQICoordinator(hass, config_entry)
     
     # 初始化 hass.data 中DOMAIN的預設值，確保DOMAIN鍵存在
