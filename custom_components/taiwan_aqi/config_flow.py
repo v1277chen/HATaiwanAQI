@@ -1,136 +1,201 @@
-from homeassistant import config_entries
-from homeassistant.core import callback
-import voluptuous as vol
-from .const import DOMAIN
+import logging
+# 導入 logging 模組，用於記錄日誌信息。
 
-# 整合後的縣市與測站名稱
-CITY_STATION_OPTIONS = {
-    "屏東縣-屏東(枋山)": "屏東(枋山)",
-    "臺中市-大甲（日南國小）": "大甲（日南國小）",
-    "新北市-新北(樹林)": "新北(樹林)",
-    "屏東縣-屏東（琉球）": "屏東（琉球）",
-    "臺南市-臺南（麻豆）": "臺南（麻豆）",
-    "高雄市-高雄（湖內）": "高雄（湖內）",
-    "彰化縣-彰化（員林）": "彰化（員林）",
-    "彰化縣-大城": "大城",
-    "新北市-富貴角": "富貴角",
-    "雲林縣-麥寮": "麥寮",
-    "臺東縣-關山": "關山",
-    "澎湖縣-馬公": "馬公",
-    "金門縣-金門": "金門",
-    "連江縣-馬祖": "馬祖",
-    "南投縣-埔里": "埔里",
-    "高雄市-復興": "復興",
-    "新北市-永和": "永和",
-    "南投縣-竹山": "竹山",
-    "桃園市-中壢": "中壢",
-    "新北市-三重": "三重",
-    "宜蘭縣-冬山": "冬山",
-    "臺北市-陽明": "陽明",
-    "花蓮縣-花蓮": "花蓮",
-    "臺東縣-臺東": "臺東",
-    "屏東縣-恆春": "恆春",
-    "屏東縣-潮州": "潮州",
-    "屏東縣-屏東": "屏東",
-    "高雄市-小港": "小港",
-    "高雄市-前鎮": "前鎮",
-    "高雄市-前金": "前金",
-    "高雄市-左營": "左營",
-    "高雄市-楠梓": "楠梓",
-    "高雄市-林園": "林園",
-    "高雄市-大寮": "大寮",
-    "高雄市-鳳山": "鳳山",
-    "高雄市-仁武": "仁武",
-    "高雄市-橋頭": "橋頭",
-    "高雄市-美濃": "美濃",
-    "臺南市-臺南": "臺南",
-    "臺南市-安南": "安南",
-    "臺南市-善化": "善化",
-    "臺南市-新營": "新營",
-    "嘉義市-嘉義": "嘉義",
-    "雲林縣-臺西": "臺西",
-    "嘉義縣-朴子": "朴子",
-    "嘉義縣-新港": "新港",
-    "雲林縣-崙背": "崙背",
-    "雲林縣-斗六": "斗六",
-    "南投縣-南投": "南投",
-    "彰化縣-二林": "二林",
-    "彰化縣-線西": "線西",
-    "彰化縣-彰化": "彰化",
-    "臺中市-西屯": "西屯",
-    "臺中市-忠明": "忠明",
-    "臺中市-大里": "大里",
-    "臺中市-沙鹿": "沙鹿",
-    "臺中市-豐原": "豐原",
-    "苗栗縣-三義": "三義",
-    "苗栗縣-苗栗": "苗栗",
-    "苗栗縣-頭份": "頭份",
-    "新竹市-新竹": "新竹",
-    "新竹縣-竹東": "竹東",
-    "新竹縣-湖口": "湖口",
-    "桃園市-龍潭": "龍潭",
-    "桃園市-平鎮": "平鎮",
-    "桃園市-觀音": "觀音",
-    "桃園市-大園": "大園",
-    "桃園市-桃園": "桃園",
-    "臺北市-大同": "大同",
-    "臺北市-松山": "松山",
-    "臺北市-古亭": "古亭",
-    "臺北市-萬華": "萬華",
-    "臺北市-中山": "中山",
-    "臺北市-士林": "士林",
-    "新北市-淡水": "淡水",
-    "新北市-林口": "林口",
-    "新北市-菜寮": "菜寮",
-    "新北市-新莊": "新莊",
-    "新北市-板橋": "板橋",
-    "新北市-土城": "土城",
-    "新北市-新店": "新店",
-    "新北市-萬里": "萬里",
-    "新北市-汐止": "汐止",
-    "基隆市-基隆": "基隆"
-}
+import voluptuous as vol
+# 導入 voluptuous 模組並將其別名為 vol，這是一個用於數據驗證的庫。
+
+from homeassistant import config_entries
+# 從 homeassistant 導入 config_entries 模組，用於處理 Home Assistant 的配置流程。
+
+from homeassistant.core import callback
+# 從 homeassistant.core 導入 callback 裝飾器，用於標記異步回調函數。
+
+from homeassistant.helpers.selector import (
+# 從 homeassistant.helpers.selector 導入各種選擇器，用於在配置界面中顯示輸入字段。
+    TextSelector,
+    # 文本選擇器，用於普通文本輸入。
+    TextSelectorConfig,
+    # 文本選擇器的配置類。
+    TextSelectorType,
+    # 文本選擇器的類型（例如，TEXT）。
+    SelectSelector,
+    # 選擇選擇器，用於下拉菜單或多選框。
+    SelectSelectorConfig,
+    # 選擇選擇器的配置類。
+    SelectSelectorMode,
+    # 選擇選擇器的模式（例如，DROPDOWN, LIST, RADIOS）。
+    SelectOptionDict,
+    # 選擇選項的字典格式。
+)
+
+from .const import (
+# 從當前包的 const 模組導入常量。
+    DOMAIN,
+    # 該集成（integration）的域名。
+    CONF_API_KEY,
+    # API 密鑰的配置鍵。
+    CONF_SITEID,
+    # 站點 ID 的配置鍵。
+    SITEID_DICT,
+    # 包含站點 ID 及其對應名稱的字典。
+)
+
+_LOGGER = logging.getLogger(__name__)
+# 獲取當前模組的日誌記錄器實例，用於記錄程序運行時的信息。
+
+TEXT_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT))
+# 創建一個文本選擇器實例，配置為普通的文本輸入類型。
+
+SITE_SELECTOR = SelectSelector(
+# 創建一個選擇選擇器實例。
+    SelectSelectorConfig(
+    # 配置選擇選擇器。
+        options=[SelectOptionDict(value=str(v), label=k) for k, v in SITEID_DICT.items()],
+        # 設置選項列表，每個選項是一個字典，包含 value（站點 ID）和 label（站點名稱）。
+        # 將 value 轉換為字符串，因為 SelectOptionDict 可能需要字符串類型。
+        mode=SelectSelectorMode.DROPDOWN,
+        # 設置選擇模式為下拉菜單。
+        custom_value=False,
+        # 不允許用戶輸入自定義值。
+        multiple=True
+        # 允許用戶選擇多個選項。
+    )
+)
 
 
 class TaiwanAQIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+# 定義 TaiwanAQIConfigFlow 類，繼承自 config_entries.ConfigFlow，負責 Home Assistant 的配置流程。
+# domain=DOMAIN 將此配置流程與特定的集成域名關聯。
     """Handle a config flow for Taiwan AQI."""
+    # 類文檔字符串，說明此類用於處理台灣空氣品質監測（Taiwan AQI）的配置流程。
+
+    VERSION = 1
+    # 定義配置流程的版本號。當配置流程的數據結構發生變化時，需要更新此版本號。
+
+    @staticmethod
+    # 靜態方法裝飾器，表示該方法不依賴於類的實例。
+    @callback
+    # 回調裝飾器，標記這是一個可以異步調用的回調函數。
+    def async_get_options_flow(config_entry):
+    # 靜態方法，用於返回選項流程的處理器。
+        """Return the options flow handler."""
+        # 方法文檔字符串，說明此方法返回選項流程的處理器。
+        return TaiwanAQIOptionsFlow()
+        # 返回 TaiwanAQIOptionsFlow 類的實例，該類將處理配置條目的選項。
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step."""
+    # 異步方法，處理用戶首次配置集成時的步驟。
+    # user_input 參數包含用戶提交的表單數據。
+        """Handle the initial configuration step."""
+        # 方法文檔字符串，說明此方法處理初始配置步驟。
+        errors = {}
+        # 初始化一個空字典，用於存儲驗證錯誤信息。
+
+        if self._async_current_entries():
+        # 檢查是否已經存在當前集成的配置條目。
+            return self.async_abort(reason="single_instance_allowed")
+            # 如果已經存在，則中止配置流程，因為只允許單個實例。
+        if self.hass.data.get(DOMAIN):
+        # 檢查 Home Assistant 的數據中是否已存在此 DOMAIN 的數據（表示集成已加載）。
+            return self.async_abort(reason="single_instance_allowed")
+            # 如果已存在，則中止配置流程，因為只允許單個實例。
+
         if user_input is not None:
-            # 當使用者輸入 API Key 和選擇了測站後，將測站名稱和 API Key 存入 config_entry
-            selected_station = CITY_STATION_OPTIONS[user_input["station"]]  # 取得實際存檔的測站名稱
-            api_key = user_input["api_key"]
-            return self.async_create_entry(
-                title=selected_station, 
-                data={"station": selected_station, "api_key": api_key}
-            )
+        # 如果用戶提交了表單數據。
+            if not user_input[CONF_API_KEY]:
+            # 如果 API 密鑰為空。
+                errors["base"] = "no_api"
+                # 在 errors 字典中添加一個錯誤，鍵為 "base"，值為 "no_api"。
+            elif not user_input[CONF_SITEID]:
+            # 如果站點 ID 為空。
+                errors["base"] = "no_id"
+                # 在 errors 字典中添加一個錯誤，鍵為 "base"，值為 "no_id"。
+            else:
+            # 如果 API 密鑰和站點 ID 都已提供。
+                return self.async_create_entry(
+                # 創建一個新的配置條目。
+                    title="TWAQ Monitor",
+                    # 配置條目的標題。
+                    data=user_input,
+                    # 配置條目中存儲的數據，即用戶輸入。
+                )
 
-        # 顯示縣市-測站選項和 API Key 輸入框
-        schema = vol.Schema({
-            vol.Required("api_key"): str,  # 請使用者輸入 API Key
-            vol.Required("station"): vol.In(list(CITY_STATION_OPTIONS.keys()))  # 讓使用者選擇測站
-        })
+        schema = vol.Schema(
+        # 創建一個 voluptuous 模式 (schema) 來定義表單的結構和驗證規則。
+            {
+                vol.Required(CONF_API_KEY): TEXT_SELECTOR,
+                # 必填字段 CONF_API_KEY，使用 TEXT_SELECTOR 顯示為文本輸入框。
+                vol.Required(CONF_SITEID): SITE_SELECTOR
+                # 必填字段 CONF_SITEID，使用 SITE_SELECTOR 顯示為下拉選擇框（多選）。
+            }
+        )
 
-        return self.async_show_form(step_id="user", data_schema=schema)
+        return self.async_show_form(
+        # 顯示配置表單給用戶。
+            step_id="user",
+            # 當前步驟的 ID。
+            data_schema=schema,
+            # 表單的數據模式。
+            errors=errors,
+            # 要顯示的錯誤信息。
+        )
 
-    @callback
-    def async_get_options_flow(self, config_entry):
-        """Return the options flow handler."""
-        return TaiwanAQIOptionsFlowHandler(config_entry)
 
-
-class TaiwanAQIOptionsFlowHandler(config_entries.OptionsFlow):
+class TaiwanAQIOptionsFlow(config_entries.OptionsFlow):
+# 定義 TaiwanAQIOptionsFlow 類，繼承自 config_entries.OptionsFlow，用於處理已配置集成的選項。
     """Handle Taiwan AQI options."""
-
-    def __init__(self, config_entry):
-        """Initialize the options flow."""
-        self.config_entry = config_entry
+    # 類文檔字符串，說明此類用於處理台灣空氣品質監測（Taiwan AQI）的選項。
 
     async def async_step_init(self, user_input=None):
+    # 異步方法，處理選項流程的初始步驟。
+    # user_input 參數包含用戶提交的表單數據。
         """Manage the options."""
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+        # 方法文檔字符串，說明此方法管理選項。
+        errors = {}
+        # 初始化一個空字典，用於存儲驗證錯誤信息。
 
-        # 可以根據需求設置選項邏輯，例如修改測站或其他配置
-        return self.async_show_form(step_id="init", data_schema=vol.Schema({}))
+        if user_input is not None:
+        # 如果用戶提交了表單數據。
+            if not user_input[CONF_API_KEY]:
+            # 如果 API 密鑰為空。
+                errors["base"] = "no_api"
+                # 在 errors 字典中添加一個錯誤，鍵為 "base"，值為 "no_api"。
+            elif not user_input[CONF_SITEID]:
+            # 如果站點 ID 為空。
+                errors["base"] = "no_id"
+                # 在 errors 字典中添加一個錯誤，鍵為 "base"，值為 "no_id"。
+            else:
+            # 如果 API 密鑰和站點 ID 都已提供。
+                # 更新選項
+                self.hass.config_entries.async_update_entry(
+                # 調用 Home Assistant 的配置條目管理器來更新現有的配置條目。
+                    self.config_entry, data=user_input
+                    # 指定要更新的 config_entry 和新的數據 user_input。
+                )
+                return self.async_create_entry(title=None, data=None)
+                # 創建一個不帶標題和數據的空條目，表示選項已成功更新並關閉選項流程。
+
+        old_apikey = self.config_entry.data.get(CONF_API_KEY)
+        # 從現有的配置條目中獲取舊的 API 密鑰。
+        old_siteid = self.config_entry.data.get(CONF_SITEID, [])
+        # 從現有的配置條目中獲取舊的站點 ID，如果不存在則默認為空列表。
+
+        schema = vol.Schema(
+        # 創建一個 voluptuous 模式 (schema) 來定義選項表單的結構和驗證規則。
+            {
+                vol.Required(CONF_API_KEY, default=old_apikey): TEXT_SELECTOR,
+                # 必填字段 CONF_API_KEY，默認為舊的 API 密鑰，使用 TEXT_SELECTOR 顯示。
+                vol.Required(CONF_SITEID, default=old_siteid): SITE_SELECTOR
+                # 必填字段 CONF_SITEID，默認為舊的站點 ID 列表，使用 SITE_SELECTOR 顯示。
+            }
+        )
+
+        return self.async_show_form(
+        # 顯示選項表單給用戶。
+            step_id="init",
+            # 當前步驟的 ID。
+            data_schema=schema,
+            # 表單的數據模式。
+            errors=errors,
+            # 要顯示的錯誤信息。
+        )
