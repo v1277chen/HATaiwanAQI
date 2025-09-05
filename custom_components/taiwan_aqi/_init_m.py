@@ -1,4 +1,4 @@
-import logging # 導入 logging 模組，用於記錄日誌資訊
+import logging # 導入 logging 模組，用於記錄日誌資訊 
 
 from copy import deepcopy # 從 copy 模組導入 deepcopy 函數，用於深度複製物件
 
