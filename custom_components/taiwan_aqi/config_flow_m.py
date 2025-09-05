@@ -63,11 +63,11 @@ SITE_SELECTOR = SelectSelector(
 )
 
 
-class TaiwanAQMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-# 定義 TaiwanAQMConfigFlow 類，繼承自 config_entries.ConfigFlow，負責 Home Assistant 的配置流程。
+class TaiwanAQIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+# 定義 TaiwanAQIConfigFlow 類，繼承自 config_entries.ConfigFlow，負責 Home Assistant 的配置流程。
 # domain=DOMAIN 將此配置流程與特定的集成域名關聯。
-    """Handle a config flow for Taiwan AQM."""
-    # 類文檔字符串，說明此類用於處理台灣空氣品質監測（Taiwan AQM）的配置流程。
+    """Handle a config flow for Taiwan AQI."""
+    # 類文檔字符串，說明此類用於處理台灣空氣品質監測（Taiwan AQI）的配置流程。
 
     VERSION = 1
     # 定義配置流程的版本號。當配置流程的數據結構發生變化時，需要更新此版本號。
@@ -80,8 +80,8 @@ class TaiwanAQMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # 靜態方法，用於返回選項流程的處理器。
         """Return the options flow handler."""
         # 方法文檔字符串，說明此方法返回選項流程的處理器。
-        return TaiwanAQMOptionsFlow()
-        # 返回 TaiwanAQMOptionsFlow 類的實例，該類將處理配置條目的選項。
+        return TaiwanAQIOptionsFlow()
+        # 返回 TaiwanAQIOptionsFlow 類的實例，該類將處理配置條目的選項。
 
     async def async_step_user(self, user_input=None):
     # 異步方法，處理用戶首次配置集成時的步驟。
@@ -141,10 +141,10 @@ class TaiwanAQMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class TaiwanAQMOptionsFlow(config_entries.OptionsFlow):
-# 定義 TaiwanAQMOptionsFlow 類，繼承自 config_entries.OptionsFlow，用於處理已配置集成的選項。
-    """Handle Taiwan AQM options."""
-    # 類文檔字符串，說明此類用於處理台灣空氣品質監測（Taiwan AQM）的選項。
+class TaiwanAQIOptionsFlow(config_entries.OptionsFlow):
+# 定義 TaiwanAQIOptionsFlow 類，繼承自 config_entries.OptionsFlow，用於處理已配置集成的選項。
+    """Handle Taiwan AQI options."""
+    # 類文檔字符串，說明此類用於處理台灣空氣品質監測（Taiwan AQI）的選項。
 
     async def async_step_init(self, user_input=None):
     # 異步方法，處理選項流程的初始步驟。
