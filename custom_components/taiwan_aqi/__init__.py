@@ -1,95 +1,138 @@
-import logging
-import requests
-from datetime import timedelta
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.service import async_register_admin_service
-from .const import DOMAIN, API_URL, UPDATE_INTERVAL
+import logging # 導入 logging 模組，用於記錄日誌資訊 
 
-_LOGGER = logging.getLogger(__name__)
+from copy import deepcopy # 從 copy 模組導入 deepcopy 函數，用於深度複製物件
 
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Set up Taiwan AQI from a config entry."""
-    coordinator = AQICoordinator(hass, config_entry)
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][config_entry.entry_id] = coordinator
+from homeassistant.config_entries import ConfigEntry # 從 Home Assistant 導入 ConfigEntry 類，表示一個配置條目
+from homeassistant.core import HomeAssistant, ServiceCall # 從 Home Assistant 導入 HomeAssistant 核心物件和 ServiceCall 類，用於服務呼叫
+from homeassistant.helpers.typing import ConfigType # 從 Home Assistant 導入 ConfigType 類型提示
+from homeassistant.helpers import config_validation as cv # 從 Home Assistant 導入 config_validation 模組，通常用於配置驗證，並將其別名為 cv
+from homeassistant.helpers import entity_registry as er # 從 Home Assistant 導入 entity_registry 模組，用於管理實體註冊
+from homeassistant.helpers import device_registry as dr # 從 Home Assistant 導入 device_registry 模組，用於管理設備註冊
+from homeassistant.helpers.event import async_track_time_change # 從 Home Assistant 導入 async_track_time_change 函數，用於跟蹤時間變化事件
 
-    # 初始化感測器平台
-    await hass.config_entries.async_forward_entry_setups(config_entry, ["sensor"])
+from .coordinator import AQMCoordinator # 從當前包導入 AQMCoordinator 類，負責資料協調
+from .const import ( # 從當前包導入 const 模組中的常量
+    DOMAIN, # 領域名稱，通常是整合的唯一識別碼
+    CONF_SITEID, # 配置中用於站點ID的鍵
+    COORDINATOR, # 協調器物件的鍵
+    SITEID, # 站點ID的鍵
+    TASK, # 定時任務的鍵
+    PLATFORM, # 平台名稱，例如 'sensor'
+    UPDATE_INTERVAL, # 更新間隔時間
+)
 
-    # 註冊全局服務，讓所有感測器可以手動更新
-    hass.services.async_register(DOMAIN, "update_aqi_data", service_update_aqi_data)
+CONFIG_SCHEMA = cv.removed(DOMAIN, raise_if_present=True) # 定義配置 schema，這裡表示舊的配置方式已被移除，如果存在則會拋出錯誤
+_LOGGER = logging.getLogger(__name__) # 獲取一個日誌記錄器實例，用於記錄此模組的日誌
 
-    # 立即取得最新資料
-    await coordinator.async_refresh()
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up global services for Taiwan AQM .""" # 設定台灣空氣品質監測的全局服務
+    return True # 返回 True 表示設定成功
 
-    return True
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Taiwan AQM from a config entry.""" # 從配置條目設定台灣空氣品質監測
+    try:
+        hass.data.setdefault(DOMAIN, {}) # 如果 hass.data 中沒有 DOMAIN 鍵，則設定為一個空字典
+        # 創建 AQMCoordinator 實例，負責獲取和協調空氣品質資料
+        coordinator = AQMCoordinator(hass, entry, UPDATE_INTERVAL)
 
-async def service_update_aqi_data(service_call):
-    """Handle the service call to update AQI data for all entities."""
-    _LOGGER.info("Manually triggering AQI data update for all sensors.")
+        async def refresh_task(*args):
+            """定義一個非同步刷新任務"""
+            await coordinator.async_refresh() # 呼叫協調器進行資料刷新
+            _LOGGER.debug(
+                f"Refresh Success at: {args[0].strftime('%Y-%m-%d %H:%M:%S %Z')}" # 記錄刷新成功的日誌，包含時間
+            )
 
-    # 更新所有已註冊的感測器的數據 
-    entities = []
-    for entity in service_call.context:
-        if isinstance(entity, AQISensor):
-            entities.append(entity)
-    
-    for entity in entities:
-        await entity.async_update_aqi_data()
+        # 設定一個每10分鐘執行的定時任務，呼叫 refresh_task
+        task = async_track_time_change(hass, refresh_task, minute=10, second=0)
+        # 將協調器、站點ID和定時任務儲存到 hass.data 中，以便後續存取
+        hass.data[DOMAIN][entry.entry_id] = {
+            COORDINATOR: coordinator,
+            SITEID: entry.data.get(CONF_SITEID),
+            TASK: task,
+        }
+        # 執行協調器的首次資料刷新
+        await coordinator.async_config_entry_first_refresh()
+        # 初始化感測器平台
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORM)
 
-class AQICoordinator(DataUpdateCoordinator):
-    """Class to manage fetching AQI data from the API."""
+        # 當配置條目更新時，註冊 update_listener 函數
+        entry.async_on_unload(entry.add_update_listener(update_listener))
 
-    def __init__(self, hass, config_entry):
-        """Initialize the AQI coordinator."""
-        self.hass = hass
-        self.config_entry = config_entry
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=DOMAIN,
-            update_interval=timedelta(seconds=UPDATE_INTERVAL),
+        return True # 返回 True 表示設定成功
+    except Exception as e:
+        _LOGGER.error(f"async_setup_entry error: {e}") # 記錄錯誤日誌
+        return False # 返回 False 表示設定失敗
+
+async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Update listener.""" # 更新監聽器
+    try:
+        # 當配置條目更新時，重新載入該配置條目
+        await hass.config_entries.async_reload(entry.entry_id)
+    except Exception as e:
+        _LOGGER.error(f"update_listener error: {e}") # 記錄錯誤日誌
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry.""" # 卸載一個配置條目
+    try:
+        # 獲取並取消定時任務
+        task = hass.data[DOMAIN][entry.entry_id].get(TASK)
+        task()
+        # 卸載平台（例如，感測器平台）
+        unload_ok = await hass.config_entries.async_unload_platforms(
+            entry, PLATFORM
         )
 
-    async def _async_update_data(self):
-        """Fetch data from API."""
-        try:
-            station = self.config_entry.data["station"]
-            api_key = self.config_entry.data["api_key"]  # 使用 config_entry 中的 API Key
-            response = await self.hass.async_add_executor_job(self._fetch_data, station, api_key)
-            return response
-        except Exception as err:
-            _LOGGER.error(f"Error fetching AQI data for {station}: {err}")
-            raise UpdateFailed(f"Failed to fetch data: {err}")
-
-    def _fetch_data(self, station, api_key):
-        """Fetch the AQI data from the API."""
-        try:
-            params = {
-                "language": "zh",
-                "api_key": api_key
+        if unload_ok:
+            # 獲取舊的站點ID和新的站點ID
+            old_siteid = hass.data[DOMAIN][entry.entry_id].get(SITEID, [])
+            new_siteid = entry.data.get(CONF_SITEID, [])
+            # 計算需要移除的設備識別符
+            del_dev_identifiers = {
+                (DOMAIN, id)
+                for id in old_siteid if id not in new_siteid
             }
-            response = requests.get(API_URL, params=params)
-            response.raise_for_status()
-            data = response.json()
+            _LOGGER.debug(f"remove dev_identifiers: {del_dev_identifiers}") # 記錄要移除的設備識別符
+            if del_dev_identifiers:
+                # 獲取設備註冊表
+                dev_reg = dr.async_get(hass)
+                # 篩選出需要移除的設備
+                devices = [
+                    device for device in
+                    dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
+                    if device.identifiers & del_dev_identifiers
+                ]
+                # 移除設備
+                for dev in devices:
+                    dev_reg.async_remove_device(dev.id)
+                    _LOGGER.debug(f"removed device: {dev.id}") # 記錄已移除的設備
 
-            # 過濾出選定的測站資料
-            for record in data["records"]:
-                if record["sitename"] == station:
-                    # 確保數值是以數字形式處理，如果是文字，將其轉換為浮點數或整數
-                    return {
-                        "aqi": int(record.get("aqi", 0)),  # 將 AQI 轉換為整數
-                        "pm2.5": float(record.get("pm2.5", 0)),  # 將 PM2.5 轉換為浮點數
-                        "pm10": float(record.get("pm10", 0)),  # 將 PM10 轉換為浮點數
-                        "o3": float(record.get("o3", 0)),  # 將 O3 轉換為浮點數
-                        "no2": float(record.get("no2", 0)),  # 將 NO2 轉換為浮點數
-                        "so2": float(record.get("so2", 0)),  # 將 SO2 轉換為浮點數
-                        "co": float(record.get("co", 0)),  # 將 CO 轉換為浮點數
-                        "publishtime": record.get("publishtime", "N/A")  # 保留時間作為文字
-                    }
-            return None
-        except Exception as e:
-            _LOGGER.error(f"Error while fetching data from API for station {station}: {e}")
-            raise
+            # 從 hass.data 中移除當前配置條目的資料
+            hass.data[DOMAIN].pop(entry.entry_id)
+            # 如果 DOMAIN 下沒有其他配置條目了，則移除 DOMAIN 鍵
+            if DOMAIN in hass.data and not hass.data[DOMAIN]:
+                hass.data.pop(DOMAIN)
+
+            return True # 返回 True 表示卸載成功
+        else:
+            return False # 返回 False 表示卸載失敗
+    except Exception as e:
+        _LOGGER.error(f"async_unload_entry error: {e}") # 記錄錯誤日誌
+        return False # 返回 False 表示卸載失敗
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the config entry.""" # 重新載入配置條目
+    # 呼叫 Home Assistant 的配置條目重新載入功能
+    await hass.config_entries.async_reload(entry.entry_id)
+
+# async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+# """Migrate config entry.""" # 遷移配置條目
+# if entry.version > 2:
+# # 未來版本無法處理
+# return False
+#
+# if entry.version < 2:
+# # 舊版本更新資料
+# data = deepcopy(dict(entry.data))
+#
+# hass.config_entries.async_update_entry(entry, version=2, data=data)
+# return True
