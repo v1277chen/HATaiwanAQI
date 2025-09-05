@@ -1,171 +1,173 @@
-from homeassistant.components.sensor import SensorEntity
-# 從 Home Assistant 的感測器組件中導入 SensorEntity 類別，這是所有感測器實體的基類。
+from __future__ import annotations # 啟用未來版本的特性，例如在型別提示中使用 `list[str]` 而不是 `typing.List[str]`。
 
-from .const import DOMAIN
-# 從當前套件 (taiwan_aqi) 的 const 模塊中導入 DOMAIN 常量，通常用於標識集成領域。
+import logging # 導入 logging 模組，用於記錄程式運行時的資訊、警告或錯誤。
 
-import logging
-# 導入 Python 標準庫中的 logging 模塊，用於記錄日誌信息。
+from homeassistant.components.sensor import RestoreSensor # 從 Home Assistant 的感測器組件導入 RestoreSensor，這允許感測器在 Home Assistant 重啟後恢復其上次的狀態。
+from homeassistant.helpers.update_coordinator import CoordinatorEntity # 從 Home Assistant 的更新協調器助手導入 CoordinatorEntity，這是一個實體基礎類別，它使用協調器來管理數據更新。
 
-_LOGGER = logging.getLogger(__name__)
-# 獲取一個日誌記錄器實例。__name__ 會是 'custom_components.taiwan_aqi.sensor'，這有助於區分不同模塊的日誌。
+from .const import ( # 從當前套件的 const.py 檔案中導入常數。
+    DOMAIN, # 整合的領域名稱，通常是整合的唯一識別符。
+    SITENAME_DICT, # 站點名稱字典，用於將站點 ID 對應到其名稱。
+    SENSOR_INFO, # 感測器資訊字典，包含不同空氣品質類型（如 PM2.5, AQI）的配置。
+    CONF_SITEID, # 配置中用於站點 ID 的鍵。
+    COORDINATOR, # 配置中用於協調器實例的鍵。
+)
 
-# 定義不同的感測器類型
-# 這是一個註釋，說明接下來的字典將定義不同的空氣品質感測器類型。
+_LOGGER = logging.getLogger(__name__) # 獲取一個 logger 實例，用於在此模組中記錄訊息。
 
-SENSOR_TYPES = {
-# 定義一個名為 SENSOR_TYPES 的字典，用於映射感測器類型的短名稱和其顯示名稱。
- "aqi": "AQI",
- # 鍵 "aqi" 對應值 "AQI"，表示空氣品質指標。
- "pm2.5": "PM2.5",
- # 鍵 "pm2.5" 對應值 "PM2.5"，表示細懸浮微粒。
- "pm10": "PM10",
- # 鍵 "pm10" 對應值 "PM10"，表示懸浮微粒。
- "o3": "O3",
- # 鍵 "o3" 對應值 "O3"，表示臭氧。
- "no2": "NO2",
- # 鍵 "no2" 對應值 "NO2"，表示二氧化氮。
- "so2": "SO2",
- # 鍵 "so2" 對應值 "SO2"，表示二氧化硫。
- "co": "CO"
- # 鍵 "co" 對應值 "CO"，表示一氧化碳。
-}
+async def async_setup_entry(hass, entry, async_add_entities): # 非同步函式，用於從配置條目設定台灣空氣品質監測感測器。
+    """Set up Taiwan aqi sensors from a config entry.""" # 函式的說明字串。
+    try: # 嘗試執行以下程式碼。
+        siteid = entry.data.get(CONF_SITEID) # 從配置條目中獲取站點 ID。
+        coordinator = hass.data[DOMAIN][entry.entry_id].get(COORDINATOR) # 從 Home Assistant 的數據中獲取此配置條目的協調器實例。
 
-DEVICE_CLASSES = {
-# 定義一個名為 DEVICE_CLASSES 的字典，用於將感測器類型映射到 Home Assistant 預定義的設備類別。
- "aqi": "aqi", # 如果存在 device_class for AQI，否則可以不設置
- # 鍵 "aqi" 對應值 "aqi"。如果 Home Assistant 有 "aqi" 的設備類別，則使用它。
- "pm2.5": "pm25", # PM2.5 濃度
- # 鍵 "pm2.5" 對應值 "pm25"，代表 PM2.5 濃度。
- "pm10": "pm10", # PM10 濃度
- # 鍵 "pm10" 對應值 "pm10"，代表 PM10 濃度。
- "o3": "ozone", # 臭氧濃度
- # 鍵 "o3" 對應值 "ozone"，代表臭氧濃度。
- "no2": "nitrogen_dioxide", # 二氧化氮濃度
- # 鍵 "no2" 對應值 "nitrogen_dioxide"，代表二氧化氮濃度。
- "so2": "sulphur_dioxide", # 二氧化硫濃度
- # 鍵 "so2" 對應值 "sulphur_dioxide"，代表二氧化硫濃度。
- "co": "carbon_monoxide" # 一氧化碳濃度
- # 鍵 "co" 對應值 "carbon_monoxide"，代表一氧化碳濃度。
-}
+        entities = [ # 創建感測器實體列表。
+            aqiSensor( # 為每個站點和每個感測器類型創建一個 aqiSensor 實例。
+                coordinator=coordinator, # 傳遞數據更新協調器。
+                siteid=s_id, # 傳遞站點 ID。
+                sitename=SITENAME_DICT[s_id], # 傳遞站點名稱。
+                aq_type=aq_type, # 傳遞空氣品質類型（如 "pm25"）。
+                device_class=config["dc"], # 傳遞設備類別（device_class），用於 Home Assistant 的顯示和自動化。
+                unit_of_measurement=config["unit"], # 傳遞測量單位。
+                state_class=config["sc"], # 傳遞狀態類別（state_class），例如 "measurement" 或 "total"，用於歷史數據圖表。
+                display_precision=config["dp"], # 傳遞顯示精度（小數點後位數）。
+                icon=config["icon"] # 傳遞感測器圖標。
+            ) for s_id in siteid # 遍歷所有配置的站點 ID。
+            for aq_type, config in SENSOR_INFO.items() # 遍歷 SENSOR_INFO 中定義的每個空氣品質類型及其配置。
+        ]
+        async_add_entities(entities) # 將創建的感測器實體添加到 Home Assistant。
+    except Exception as e: # 捕獲任何可能發生的異常。
+        _LOGGER.error(f"setup sensor error: {e}") # 記錄錯誤訊息。
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
-# 定義一個異步函數，用於設置 Home Assistant 的配置條目。
-# hass: Home Assistant 核心實例。
-# config_entry: 當前集成的配置條目。
-# async_add_entities: 用於將感測器實體添加到 Home Assistant 的回調函數。
+class aqiSensor(CoordinatorEntity, RestoreSensor): # 定義 aqiSensor 類別，繼承自 CoordinatorEntity 和 RestoreSensor。
+    """Representation of a Taiwan aqi sensor.""" # 類別的說明字串。
 
- """Set up Taiwan AQI sensors from a config entry."""
- # 函數的文檔字符串，說明此函數的功能是從配置條目設置台灣空氣品質感測器。
+    def __init__( # aqiSensor 類的初始化方法。
+        self, # 實例本身。
+        coordinator, # 數據更新協調器。
+        siteid, # 站點 ID。
+        sitename, # 站點名稱。
+        aq_type, # 空氣品質類型。
+        device_class, # 設備類別。
+        unit_of_measurement=None, # 測量單位，可選。
+        state_class=None, # 狀態類別，可選。
+        display_precision=None, # 顯示精度，可選。
+        icon=None, # 圖標，可選。
+    ):
+        """Initialize the AQI sensor.""" # 初始化方法的說明字串。
+        super().__init__(coordinator) # 調用父類 CoordinatorEntity 的初始化方法，傳遞協調器。
+        self.siteid = siteid # 設置站點 ID。
+        self._sitename = sitename # 設置站點名稱（內部使用）。
+        self._type = aq_type # 設置空氣品質類型（內部使用）。
+        self._device_class = device_class # 設置設備類別（內部使用）。
+        self._unit_of_measurement = unit_of_measurement # 設置測量單位（內部使用）。
+        self._state_class = state_class # 設置狀態類別（內部使用）。
+        self._display_precision = display_precision # 設置顯示精度（內部使用）。
+        self._icon = icon # 設置圖標（內部使用）。
+        self._last_value = None # 初始化 _last_value 為 None，用於存儲上次的值。
+        _LOGGER.debug(f"Initialized TaiwanaqiEntity for siteid: {self.siteid}, type: {self._type}") # 記錄調試訊息，表示實體已初始化。
 
- coordinator = hass.data[DOMAIN][config_entry.entry_id]
- # 從 Home Assistant 的 hass.data 中獲取數據協調器實例。
- # hass.data[DOMAIN] 應該包含了所有屬於此集成領域的數據，然後通過 config_entry.entry_id 獲取特定配置條目的協調器。
+    async def async_added_to_hass(self): # 當實體被添加到 Home Assistant 時調用的非同步方法。
+        """Get the old value""" # 函式的說明字串，用於獲取舊值。
+        await super().async_added_to_hass() # 調用父類的方法。
 
- # 為每個定義的感測器類型建立對應的感測器
- # 註釋說明接下來的代碼將為 SENSOR_TYPES 中定義的每種類型創建一個感測器實體。
+        if (last_sensor_data := await self.async_get_last_sensor_data()) \
+            and last_sensor_data.native_value is not None \
+            and self._device_class is not None:
+            # 如果存在上次的感測器數據，且其原生值不為 None，且設備類別已定義。
+            self._last_value = last_sensor_data.native_value # 將上次的感測器原生值存儲到 _last_value。
 
- entities = [AQISensor(coordinator, sensor_type) for sensor_type in SENSOR_TYPES]
- # 使用列表推導式創建 AQISensor 實體的列表。
- # 對於 SENSOR_TYPES 中的每一種感測器類型 (sensor_type)，都會創建一個新的 AQISensor 實例，並將協調器和感測器類型傳遞給它。
+    @property # 裝飾器，將方法轉換為屬性，使其可以像訪問變數一樣訪問。
+    def _data(self): # 獲取協調器數據的屬性。
+        return self.coordinator.data # 返回協調器中存儲的數據。
 
- async_add_entities(entities)
- # 調用 async_add_entities 回調函數，將創建的感測器實體列表添加到 Home Assistant。
+    @property # 裝飾器，將方法轉換為屬性。
+    def device_info(self): # 返回設備資訊的屬性，用於 Home Assistant 中顯示設備。
+        return { # 返回一個字典，包含設備的識別資訊。
+            "identifiers": {(DOMAIN, self.siteid)}, # 設備的唯一識別符，由領域和站點 ID 組成。
+            "name": f"TWAQ Monitor - {self._sitename}({self.siteid})", # 設備的名稱。
+            "manufacturer": "Taiwan Ministry of Environment Data Open Platform", # 製造商資訊。
+            "model": "Taiwanaqi", # 型號資訊。
+        }
 
-class AQISensor(SensorEntity):
-# 定義一個名為 AQISensor 的類，它繼承自 SensorEntity。這意味著它將作為 Home Assistant 中的一個感測器。
+    @property # 裝飾器，將方法轉換為屬性。
+    def native_value(self): # 返回感測器當前原生值的屬性。
+        if self._is_valid_data() and self.coordinator.last_update_success: # 如果數據有效且上次更新成功。
+            self._last_value = self._data[self.siteid].get(self._type) # 從數據中獲取當前站點和類型的空氣品質值，並更新 _last_value。
+            return self._last_value # 返回獲取到的值。
+        else: # 如果數據無效或更新失敗。
+            return "unknown" if self._device_class is None else 0 # 如果設備類別為 None 則返回 "unknown"，否則返回 0。
 
- """Representation of a Taiwan AQI sensor."""
- # 類的文檔字符串，說明此類代表一個台灣空氣品質感測器。
+    @property # 裝飾器，將方法轉換為屬性。
+    def device_class(self): # 返回設備類別的屬性。
+        return self._device_class # 設備類型。
 
- def __init__(self, coordinator, sensor_type):
- # 類的初始化方法。
- # self: 實例本身。
- # coordinator: 數據協調器實例，用於獲取數據和處理更新。
- # sensor_type: 此感測器實體代表的具體空氣品質類型（例如 "pm2.5", "aqi"）。
+    @property # 裝飾器，將方法轉換為屬性。
+    def native_unit_of_measurement(self): # 返回原生測量單位的屬性。
+        return self._unit_of_measurement # 預設單位。
 
- """Initialize the AQI sensor."""
- # 方法的文檔字符串，說明此方法用於初始化空氣品質感測器。
+    @property # 裝飾器，將方法轉換為屬性。
+    def state_class(self): # 返回狀態類別的屬性。
+        return self._state_class # 圖表類型。
 
- self.coordinator = coordinator
- # 將傳入的協調器實例賦值給實例變量 self.coordinator。
+    @property # 裝飾器，將方法轉換為屬性。
+    def suggested_display_precision(self): # 返回建議顯示精度的屬性。
+        return self._display_precision
 
- self.sensor_type = sensor_type
- # 將傳入的感測器類型賦值給實例變量 self.sensor_type。
+    @property # 裝飾器，將方法轉換為屬性。
+    def extra_state_attributes(self): # 返回額外狀態屬性的屬性。
+        if self._data and self.siteid in self._data: # 如果有數據且站點 ID 在數據中。
+            lon = self._data[self.siteid].get("longitude", "unknown") # 獲取經度，如果沒有則為 "unknown"。
+            lat = self._data[self.siteid].get("latitude", "unknown") # 獲取緯度，如果沒有則為 "unknown"。
+        else: # 如果沒有數據或站點 ID 不在數據中。
+            lon = "unknown" # 經度設為 "unknown"。
+            lat = "unknown" # 緯度設為 "unknown"。
 
- self._attr_name = f"{SENSOR_TYPES[sensor_type]} Sensor ({coordinator.config_entry.data['station']})"
- # 設置感測器的名稱。
- # 使用 f-string 格式化字符串，結合 SENSOR_TYPES 字典中的顯示名稱和協調器配置數據中的站點名稱。
+        return { # 返回包含額外屬性的字典。
+            "sitename": self._sitename, # 站點名稱。
+            "siteid": self.siteid, # 站點 ID。
+            "longitude": lon, # 經度。
+            "latitude": lat, # 緯度。
+        }
 
- self._attr_unique_id = f"taiwan_aqi_{sensor_type}_{coordinator.config_entry.data['station']}"
- # 設置感測器的唯一 ID。
- # 唯一 ID 確保在 Home Assistant 中每個感測器都有一個獨特的標識符，通常由集成名稱、感測器類型和站點名稱組成。
+    @property # 裝飾器，將方法轉換為屬性。
+    def available(self): # 返回感測器是否可用的屬性。
+        return self.siteid in self._data # 如果站點 ID 在數據中則返回 True，表示可用。
 
- self._attr_device_class = DEVICE_CLASSES.get(sensor_type) # 設定 device_class
- # 設置感測器的設備類別。
- # 使用 DEVICE_CLASSES 字典的 .get() 方法來獲取對應 sensor_type 的設備類別。如果不存在，則返回 None。
+    @property # 裝飾器，將方法轉換為屬性。
+    def name(self): # 返回感測器名稱的屬性。
+        _type = self._type.replace("_", " ") if self._type else "unknown" # 將空氣品質類型中的下劃線替換為空格，如果沒有則為 "unknown"。
+        return f"{self._sitename} {_type}" # 返回格式化的感測器名稱（站點名稱 + 空氣品質類型）。
 
- self._attr_state_class = "measurement" # 設定 state_class 為 measurement 以支持統計
- # 設置感測器的狀態類別為 "measurement"。
- # 這表明感測器的值是可測量的，並且 Home Assistant 可以為其提供歷史統計功能。
+    @property # 裝飾器，將方法轉換為屬性。
+    def has_entity_name(self): # 返回是否使用實體名稱的屬性。
+        return False # 返回 False，表示實體名稱由 `name` 屬性提供，而不是基於設備名稱自動生成。
 
- @property
- # 裝飾器，將 state 方法轉換為一個屬性，可以像訪問變量一樣訪問它。
- def state(self):
- # 定義一個 state 屬性，用於返回感測器的當前狀態。
+    @property # 裝飾器，將方法轉換為屬性。
+    def unique_id(self): # 返回感測器唯一 ID 的屬性。
+        sanitized_name = self._type.replace(" ", "_") if self._type else "unknown" # 將空氣品質類型中的空格替換為下劃線，如果沒有則為 "unknown"。
+        return f"{DOMAIN}_{self.siteid}_{sanitized_name}" # 返回格式化的唯一 ID。
 
- """Return the state of the sensor."""
- # 屬性的文檔字符串，說明它返回感測器的狀態。
+    @property # 裝飾器，將方法轉換為屬性。
+    def icon(self): # 返回感測器圖標的屬性。
+        return self._icon # 返回在初始化時設置的圖標。
 
- if self.coordinator.data:
- # 檢查協調器是否有數據。如果為 True，表示數據已成功獲取。
+    def _is_valid_data(self) -> bool: # 內部方法，用於驗證數據的完整性。
+        """Validate the integrity of the data.""" # 函式的說明字串。
+        if not self._data: # 如果沒有數據。
+            _LOGGER.error("No data available") # 記錄錯誤訊息。
+            return False # 返回 False。
 
- return self.coordinator.data.get(self.sensor_type)
- # 從協調器的數據中獲取當前感測器類型對應的值作為狀態。
- # 使用 .get() 方法可以避免在鍵不存在時引發 KeyError。
+        if self.siteid not in self._data: # 如果站點 ID 不在數據中。
+            _LOGGER.warning(f"The site ID '{self.siteid}' is not in the data: {self._data.keys()}") # 記錄警告訊息。
+            return False # 返回 False。
 
- return None
- # 如果協調器沒有數據，則返回 None。
+        if (value := self._data[self.siteid].get(self._type)) in [None, ""]: # 如果特定站點和類型的數據值為 None 或空字符串。
+            if value is None: # 如果值為 None。
+                _LOGGER.debug(f"The value for '{self._type}' in siteID '{self.siteid}' is missing or None.") # 記錄調試訊息。
+            elif value == "": # 如果值為空字符串。
+                _LOGGER.debug(f"The value for '{self._type}' in siteID '{self.siteid}' is empy") # 記錄調試訊息。
+            return False # 返回 False。
 
- @property
- # 裝飾器，將 extra_state_attributes 方法轉換為一個屬性。
- def extra_state_attributes(self):
- # 定義一個 extra_state_attributes 屬性，用於返回感測器的額外狀態屬性。
-
- """Return extra state attributes."""
- # 屬性的文檔字符串，說明它返回額外的狀態屬性。
-
- if not self.coordinator.data:
- # 檢查協調器是否有數據。如果為 False，表示沒有數據。
-
- return {}
- # 如果沒有數據，則返回一個空字典作為額外屬性。
-
- return {
- # 如果有數據，則返回一個包含額外屬性的字典。
- "station": self.coordinator.config_entry.data["station"],
- # 包含站點名稱，從協調器的配置條目數據中獲取。
- "last_update": self.coordinator.data.get("publishtime")
- # 包含最後更新時間，從協調器的數據中獲取 "publishtime" 字段。
- }
-
- async def async_update(self):
- # 定義一個異步方法，用於請求從協調器更新數據。
-
- """Request an update from the coordinator."""
- # 方法的文檔字符串，說明它請求從協調器更新。
-
- await self.coordinator.async_request_refresh()
- # 調用協調器的 async_request_refresh 方法，觸發數據刷新。這是 Home Assistant 建議的從集成內部更新數據的方式。
-
- async def async_update_aqi_data(self):
- # 定義一個異步方法，作為一個服務處理器，用於手動更新 AQI 數據。
-
- """Service handler to update AQI data."""
- # 方法的文檔字符串，說明它是一個用於更新 AQI 數據的服務處理器。
-
- await self.async_update()
- # 調用自身的 async_update 方法來觸發數據更新。
-
- _LOGGER.info(f"AQI data manually updated for {self.coordinator.config_entry.data['station']}")
- # 使用日誌記錄器記錄一條信息，表示哪個站點的 AQI 數據已手動更新。
+        _LOGGER.debug(f"Valid data found for site '{self.siteid}' and type '{self._type}': {value}") # 記錄調試訊息，表示找到有效數據。
+        return True # 返回 True，表示數據有效。 [1]
