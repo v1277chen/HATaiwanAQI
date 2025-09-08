@@ -10,7 +10,7 @@ from homeassistant.helpers import entity_registry as er # 從 Home Assistant 導
 from homeassistant.helpers import device_registry as dr # 從 Home Assistant 導入 device_registry 模組，用於管理設備註冊
 from homeassistant.helpers.event import async_track_time_change # 從 Home Assistant 導入 async_track_time_change 函數，用於跟蹤時間變化事件
 
-from .coordinator import AQMCoordinator # 從當前包導入 AQMCoordinator 類，負責資料協調
+from .coordinator import AQICoordinator # 從當前包導入 AQICoordinator 類，負責資料協調
 from .const import ( # 從當前包導入 const 模組中的常量
     DOMAIN, # 領域名稱，通常是整合的唯一識別碼
     CONF_SITEID, # 配置中用於站點ID的鍵
@@ -25,15 +25,15 @@ CONFIG_SCHEMA = cv.removed(DOMAIN, raise_if_present=True) # 定義配置 schema�
 _LOGGER = logging.getLogger(__name__) # 獲取一個日誌記錄器實例，用於記錄此模組的日誌
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up global services for Taiwan AQM .""" # 設定台灣空氣品質監測的全局服務
+    """Set up global services for Taiwan aqi .""" # 設定台灣空氣品質監測的全局服務
     return True # 返回 True 表示設定成功
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Taiwan AQM from a config entry.""" # 從配置條目設定台灣空氣品質監測
+    """Set up Taiwan aqi from a config entry.""" # 從配置條目設定台灣空氣品質監測
     try:
         hass.data.setdefault(DOMAIN, {}) # 如果 hass.data 中沒有 DOMAIN 鍵，則設定為一個空字典
-        # 創建 AQMCoordinator 實例，負責獲取和協調空氣品質資料
-        coordinator = AQMCoordinator(hass, entry, UPDATE_INTERVAL)
+        # 創建 aqiCoordinator 實例，負責獲取和協調空氣品質資料
+        coordinator = aqiCoordinator(hass, entry, UPDATE_INTERVAL)
 
         async def refresh_task(*args):
             """定義一個非同步刷新任務"""
