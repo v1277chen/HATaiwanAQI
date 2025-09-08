@@ -22,7 +22,7 @@ TASK = "TIMER_TASK"
 # 台灣環境部空氣品質監測資料的 API URL。
 API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432" 
 # Home Assistant 請求時使用的 User-Agent 字串，用於識別客戶端。
-HA_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HomeAssistant/HA-Taiwanaqi" 
+HA_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HomeAssistant/HA-TaiwanAQI" 
 # 資料更新間隔設定為 11 分鐘。
 UPDATE_INTERVAL = timedelta(minutes=11) 
 # 此整合支援的平台列表，這裡指定為感測器 (Platform.SENSOR)。
