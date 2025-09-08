@@ -25,15 +25,15 @@ CONFIG_SCHEMA = cv.removed(DOMAIN, raise_if_present=True) # 定義配置 schema�
 _LOGGER = logging.getLogger(__name__) # 獲取一個日誌記錄器實例，用於記錄此模組的日誌
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up global services for Taiwan aqi .""" # 設定台灣空氣品質監測的全局服務
+    """Set up global services for Taiwan AQI .""" # 設定台灣空氣品質監測的全局服務
     return True # 返回 True 表示設定成功
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Taiwan aqi from a config entry.""" # 從配置條目設定台灣空氣品質監測
+    """Set up Taiwan AQI from a config entry.""" # 從配置條目設定台灣空氣品質監測
     try:
         hass.data.setdefault(DOMAIN, {}) # 如果 hass.data 中沒有 DOMAIN 鍵，則設定為一個空字典
-        # 創建 aqiCoordinator 實例，負責獲取和協調空氣品質資料
-        coordinator = aqiCoordinator(hass, entry, UPDATE_INTERVAL)
+        # 創建 AQICoordinator 實例，負責獲取和協調空氣品質資料
+        coordinator = AQICoordinator(hass, entry, UPDATE_INTERVAL)
 
         async def refresh_task(*args):
             """定義一個非同步刷新任務"""
